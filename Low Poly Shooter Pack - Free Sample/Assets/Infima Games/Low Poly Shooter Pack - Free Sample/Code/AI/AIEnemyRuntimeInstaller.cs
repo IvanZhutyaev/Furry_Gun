@@ -24,8 +24,8 @@ namespace InfimaGames.LowPolyShooterPack.AI
 
             GameObject enemy = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             enemy.name = "AI Enemy (Runtime)";
-            enemy.transform.position = player.transform.position + player.transform.forward * 18.0f + Vector3.right * 6.0f;
-            enemy.transform.localScale = new Vector3(1.0f, 1.9f, 1.0f);
+            enemy.transform.localScale = Vector3.one;
+            enemy.transform.position = ResolveSpawnPosition(player.transform, enemy);
 
             AIEnemyPerception perception = enemy.AddComponent<AIEnemyPerception>();
             AIEnemyCombat combat = enemy.AddComponent<AIEnemyCombat>();
@@ -37,29 +37,31 @@ namespace InfimaGames.LowPolyShooterPack.AI
             firePointObject.transform.localPosition = new Vector3(0.0f, 1.35f, 0.35f);
             combat.SetFirePoint(firePointObject.transform);
 
-            AIEnemyPatrolPoint[] patrolPoints = CreatePatrolPoints(enemy.transform.position);
-            controller.SetPatrolPoints(patrolPoints);
+            controller.SetTarget(player.transform);
         }
 
-        private static AIEnemyPatrolPoint[] CreatePatrolPoints(Vector3 center)
+        private static Vector3 ResolveSpawnPosition(Transform player, GameObject enemy)
         {
-            AIEnemyPatrolPoint[] points = new AIEnemyPatrolPoint[4];
-            Vector3[] offsets =
-            {
-                new Vector3(8.0f, 0.0f, 0.0f),
-                new Vector3(0.0f, 0.0f, 8.0f),
-                new Vector3(-8.0f, 0.0f, 0.0f),
-                new Vector3(0.0f, 0.0f, -8.0f)
-            };
+            Vector3 baseForward = player.forward;
+            baseForward.y = 0.0f;
+            if (baseForward.sqrMagnitude < 0.01f)
+                baseForward = Vector3.forward;
+            baseForward.Normalize();
 
-            for (int i = 0; i < points.Length; i++)
+            Vector3 desired = player.position + baseForward * 5.0f;
+            Vector3 rayStart = desired + Vector3.up * 20.0f;
+
+            if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, 60.0f, ~0))
             {
-                GameObject pointObject = new GameObject($"AI Patrol Point {i + 1}");
-                pointObject.transform.position = center + offsets[i];
-                points[i] = pointObject.AddComponent<AIEnemyPatrolPoint>();
+                // Place capsule bottom slightly above ground.
+                float halfHeight = 1.0f;
+                if (enemy.TryGetComponent(out CapsuleCollider collider))
+                    halfHeight = collider.height * 0.5f * enemy.transform.localScale.y;
+                return hit.point + Vector3.up * (halfHeight + 0.05f);
             }
 
-            return points;
+            return player.position + baseForward * 5.0f + Vector3.up * 1.05f;
         }
+
     }
 }

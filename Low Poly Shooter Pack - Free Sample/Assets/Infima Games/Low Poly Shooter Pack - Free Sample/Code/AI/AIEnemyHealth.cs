@@ -19,6 +19,11 @@ namespace InfimaGames.LowPolyShooterPack.AI
         private int lastDamageFrame = -1;
         private bool dead;
 
+        private void Awake()
+        {
+            onDeath ??= new UnityEvent();
+        }
+
         public bool IsAlive => !dead && healthPoints > 0.0f;
         public float GetHealthPoints() => healthPoints;
 

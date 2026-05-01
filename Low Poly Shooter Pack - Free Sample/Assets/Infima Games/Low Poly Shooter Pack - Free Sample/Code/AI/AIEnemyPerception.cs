@@ -1,4 +1,5 @@
 using UnityEngine;
+using System;
 
 namespace InfimaGames.LowPolyShooterPack.AI
 {
@@ -18,7 +19,8 @@ namespace InfimaGames.LowPolyShooterPack.AI
                 return false;
 
             Vector3 eye = transform.position + Vector3.up * eyeHeight;
-            Vector3 direction = candidate.position - eye;
+            Vector3 targetPoint = candidate.position + Vector3.up * 1.2f;
+            Vector3 direction = targetPoint - eye;
             distanceToTarget = direction.magnitude;
 
             if (distanceToTarget > viewDistance)
@@ -31,9 +33,18 @@ namespace InfimaGames.LowPolyShooterPack.AI
             if (angle > viewAngle * 0.5f)
                 return false;
 
-            if (Physics.Raycast(eye, direction.normalized, out RaycastHit hit, viewDistance, occlusionMask))
+            RaycastHit[] hits = Physics.RaycastAll(eye, direction.normalized, viewDistance, occlusionMask);
+            if (hits.Length > 0)
             {
-                return hit.transform == candidate || hit.transform.IsChildOf(candidate);
+                Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+                for (int i = 0; i < hits.Length; i++)
+                {
+                    Transform hitTransform = hits[i].transform;
+                    if (hitTransform == transform || hitTransform.IsChildOf(transform))
+                        continue;
+
+                    return hitTransform == candidate || hitTransform.IsChildOf(candidate);
+                }
             }
 
             return true;
