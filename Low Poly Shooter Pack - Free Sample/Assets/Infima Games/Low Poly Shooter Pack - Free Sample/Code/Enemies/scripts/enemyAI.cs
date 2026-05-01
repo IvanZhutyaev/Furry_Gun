@@ -7,17 +7,28 @@ public class enemyAI : MonoBehaviour
     NavMeshAgent agent;
     public float LookRadius;
     public Animator anim;
+    [Header("Health")]
+    [SerializeField] private float maxHealth = 100f;
+    [SerializeField] private float currentHealth;
 
     private bool isAttacking = false;
+    private bool isDead = false;
 
     private void Start()
     {
-        target = GameObject.FindGameObjectWithTag("Player").transform;
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null)
+            target = player.transform;
+
         agent = GetComponent<NavMeshAgent>();
+        currentHealth = maxHealth;
     }
 
     void Update()
     {
+        if (isDead)
+            return;
+
         if (!agent.isOnNavMesh || target == null) return;
 
         float distance = Vector3.Distance(target.position, transform.position);
@@ -82,5 +93,36 @@ public class enemyAI : MonoBehaviour
     {
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, LookRadius);
+    }
+
+    public void TakeDamage(float damage)
+    {
+        if (isDead)
+            return;
+
+        currentHealth = Mathf.Max(0f, currentHealth - damage);
+
+        if (currentHealth <= 0f)
+            Die();
+    }
+
+    private void Die()
+    {
+        isDead = true;
+
+        if (agent != null)
+        {
+            agent.isStopped = true;
+            if (agent.isOnNavMesh)
+                agent.ResetPath();
+        }
+
+        if (anim != null)
+        {
+            anim.SetBool("isAttack", false);
+            anim.SetBool("isRun", false);
+        }
+
+        Destroy(gameObject);
     }
 }
