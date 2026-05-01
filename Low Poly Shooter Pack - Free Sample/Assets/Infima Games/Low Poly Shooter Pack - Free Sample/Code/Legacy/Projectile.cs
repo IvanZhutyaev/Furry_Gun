@@ -39,6 +39,20 @@ public class Projectile : MonoBehaviour {
 		//Ignore collisions with other projectiles.
 		if (collision.gameObject.GetComponent<Projectile>() != null)
 			return;
+
+		//Apply damage to AI enemies if present.
+		if (collision.transform.TryGetComponent(out InfimaGames.LowPolyShooterPack.AI.AIEnemyHealth enemyHealth))
+		{
+			enemyHealth.TakeDamage(25.0f);
+			Destroy(gameObject);
+			return;
+		}
+		if (collision.transform.GetComponentInParent<InfimaGames.LowPolyShooterPack.AI.AIEnemyHealth>() is { } enemyHealthParent)
+		{
+			enemyHealthParent.TakeDamage(25.0f);
+			Destroy(gameObject);
+			return;
+		}
 		
 		// //Ignore collision if bullet collides with "Player" tag
 		// if (collision.gameObject.CompareTag("Player")) 
