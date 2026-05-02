@@ -22,6 +22,9 @@ public class enemyAI : MonoBehaviour
     private bool lastAnimRun;
     private bool isDead;
 
+    /// <summary>Один урон за текущее «окно» атаки до сброса (новая атака или AnimEvent).</summary>
+    private bool meleeHitConsumed;
+
     private void Start()
     {
         GameObject player = GameObject.FindGameObjectWithTag("Player");
@@ -84,10 +87,17 @@ public class enemyAI : MonoBehaviour
         if (attack == lastAnimAttack && run == lastAnimRun)
             return;
 
+        bool wasAttack = lastAnimAttack;
         lastAnimAttack = attack;
         lastAnimRun = run;
         anim.SetBool("isAttack", attack);
         anim.SetBool("isRun", run);
+
+        if (attack && !wasAttack)
+            meleeHitConsumed = false;
+
+        if (!attack && wasAttack)
+            meleeHitConsumed = false;
     }
 
     private void LookTarget()
@@ -109,6 +119,24 @@ public class enemyAI : MonoBehaviour
     {
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, LookRadius);
+    }
+
+    /// <summary>
+    /// Сбрасывает флаг попадания (Animation Event — начало активных кадров удара), чтобы снова можно было нанести урон 1 раз за этот замах.
+    /// </summary>
+    public void AnimEvent_MeleeSwingStart()
+    {
+        meleeHitConsumed = false;
+    }
+
+    /// <returns>Можно нанести урон триггером кулака именно сейчас — одна успешная попытка на окно атаки.</returns>
+    public bool TryConsumeMeleeHitOnce()
+    {
+        if (isDead || !isAttacking || meleeHitConsumed)
+            return false;
+
+        meleeHitConsumed = true;
+        return true;
     }
 
     public void TakeDamage(float damage)
