@@ -3,6 +3,12 @@ using UnityEngine.AI;
 
 public class enemyAI : MonoBehaviour
 {
+    private enum DeathStyle
+    {
+        FlatFall = 0,
+        Ragdoll = 1,
+        PartialRagdoll = 2
+    }
     Transform target;
     NavMeshAgent agent;
     public float LookRadius;
@@ -25,8 +31,10 @@ public class enemyAI : MonoBehaviour
     [SerializeField] private float currentHealth;
 
     [Header("Death")]
+    [SerializeField] private DeathStyle deathStyle = DeathStyle.FlatFall;
     [Tooltip("Через сколько секунд удалять тело с сцены после регдолла.")]
-    [SerializeField] private float corpseDestroyDelay = 45f;
+    [SerializeField] private float corpseDestroyDelay = 4f;
+    private const float CorpseDestroyDelayHard = 4f;
 
     private bool isAttacking;
     /// <summary>Последние значения bool в Animator — не дёргаем каждый кадр без нужды.</summary>
@@ -217,8 +225,14 @@ public class enemyAI : MonoBehaviour
         var rootRb = GetComponent<Rigidbody>();
         var capsule = GetComponent<CapsuleCollider>();
 
-        EnemyDeathRagdoll.Activate(anim, agent, rootRb, capsule);
+        if (deathStyle == DeathStyle.FlatFall)
+            EnemyDeathRagdoll.ActivateFlatFall(anim, agent, rootRb, capsule);
+        else if (deathStyle == DeathStyle.PartialRagdoll)
+            EnemyDeathRagdoll.ActivatePartial(anim, agent, rootRb, capsule);
+        else
+            EnemyDeathRagdoll.Activate(anim, agent, rootRb, capsule);
 
-        Destroy(gameObject, Mathf.Max(1f, corpseDestroyDelay));
+        // Unity сериализует старые значения в сценах/префабах, поэтому фиксируем 4 секунды жёстко.
+        Destroy(gameObject, CorpseDestroyDelayHard);
     }
 }
