@@ -13,6 +13,16 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
     [SerializeField] private float minDistanceFromPlayer = 12f;
     [SerializeField] private float navMeshSampleRadius = 18f;
     [SerializeField] private int maxSpawnAttempts = 600;
+    [SerializeField] private float maxGroundSlope = 35f;
+
+    [Header("Spawn Capsule Check")]
+    [SerializeField] private float enemyCapsuleHeight = 1.85f;
+    [SerializeField] private float enemyCapsuleRadius = 0.36f;
+    [SerializeField] private float footClearance = 0.04f;
+    [SerializeField] private LayerMask groundMask = ~0;
+    [SerializeField] private LayerMask blockingMask = ~0;
+
+    private readonly Collider[] overlapHits = new Collider[24];
 
     private static bool spawnedOnce;
 
@@ -54,7 +64,11 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
         {
             attempts++;
 
-            Vector2 ring = Random.insideUnitCircle.normalized * Random.Range(minDistanceFromPlayer, maxDistanceFromPlayer);
+            Vector2 dir = Random.insideUnitCircle;
+            if (dir.sqrMagnitude < 0.0001f)
+                dir = Vector2.right;
+            dir.Normalize();
+            Vector2 ring = dir * Random.Range(minDistanceFromPlayer, maxDistanceFromPlayer);
             Vector3 guess = center + new Vector3(ring.x, 0f, ring.y);
 
             if (!TryResolveSpawnPoint(guess, out Vector3 spawnPos))
@@ -70,23 +84,62 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
 
     private bool TryResolveSpawnPoint(Vector3 guess, out Vector3 spawnPos)
     {
-        // Priority: NavMesh
+        Vector3 candidate = guess;
+
+        // Priority: NavMesh point near the guess.
         if (NavMesh.SamplePosition(guess, out NavMeshHit navHit, navMeshSampleRadius, NavMesh.AllAreas))
+            candidate = navHit.position;
+
+        // Exact ground position under candidate (prevents floating/embedding).
+        if (!TryFindGroundPoint(candidate, out RaycastHit groundHit))
         {
-            spawnPos = navHit.position;
-            return true;
+            spawnPos = default;
+            return false;
         }
 
-        // Fallback: terrain/mesh collider below point
-        Vector3 rayStart = guess + Vector3.up * 200f;
-        if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, 500f, ~0, QueryTriggerInteraction.Ignore))
+        // Keep enemies off steep/invalid slopes.
+        float slope = Vector3.Angle(groundHit.normal, Vector3.up);
+        if (slope > maxGroundSlope)
         {
-            spawnPos = hit.point;
-            return true;
+            spawnPos = default;
+            return false;
         }
 
-        spawnPos = default;
-        return false;
+        // Volume clearance check (avoids trees/rocks/walls and any overlaps).
+        Vector3 p = groundHit.point;
+        Vector3 bottom = p + Vector3.up * (enemyCapsuleRadius + footClearance);
+        Vector3 top = p + Vector3.up * Mathf.Max(enemyCapsuleRadius + footClearance, enemyCapsuleHeight - enemyCapsuleRadius);
+
+        int hitCount = Physics.OverlapCapsuleNonAlloc(
+            bottom,
+            top,
+            enemyCapsuleRadius,
+            overlapHits,
+            blockingMask,
+            QueryTriggerInteraction.Ignore
+        );
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            Collider c = overlapHits[i];
+            if (c == null)
+                continue;
+            // Ignore the surface we're standing on.
+            if (c == groundHit.collider)
+                continue;
+            // Anything else means blocked (trees included).
+            spawnPos = default;
+            return false;
+        }
+
+        spawnPos = p;
+        return true;
+    }
+
+    private bool TryFindGroundPoint(Vector3 around, out RaycastHit groundHit)
+    {
+        Vector3 rayStart = around + Vector3.up * 200f;
+        return Physics.Raycast(rayStart, Vector3.down, out groundHit, 500f, groundMask, QueryTriggerInteraction.Ignore);
     }
 
     private static GameObject ResolveEnemyPrefab()
