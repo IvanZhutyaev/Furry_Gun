@@ -177,8 +177,9 @@ namespace InfimaGames.LowPolyShooterPack
 
             #endregion
             
-            //Update Velocity.
-            Velocity = new Vector3(movement.x, 0.0f, movement.z);
+            // Keep vertical velocity (gravity / jumps). Zeroing vy every physics step ruins falling.
+            Vector3 v = rigidBody.linearVelocity;
+            Velocity = new Vector3(movement.x, v.y, movement.z);
         }
 
         /// <summary>

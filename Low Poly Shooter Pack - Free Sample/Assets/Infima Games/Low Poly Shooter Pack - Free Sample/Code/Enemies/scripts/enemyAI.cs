@@ -12,6 +12,14 @@ public class enemyAI : MonoBehaviour
     [Tooltip("Добавляется к stoppingDistance агента: пока игрок не дальше этой суммы, враг остаётся в режиме атаки. Снимает дребезг у границы радиуса и обрывы анимации удара.")]
     [SerializeField] private float chaseResumeExtra = 0.85f;
 
+    [Header("Melee / animator")]
+    [Tooltip("Short name состояния с клипом удара на Base Layer (в enemyAnimController — «attack»). Каждый новый заход в это состояние = ещё один возможный хит.")]
+    [SerializeField]
+    private string attackAnimatorStateShortName = "attack";
+
+    [SerializeField]
+    private int attackAnimatorLayer;
+
     [Header("Health")]
     [SerializeField] private float maxHealth = 100f;
     [SerializeField] private float currentHealth;
@@ -25,6 +33,10 @@ public class enemyAI : MonoBehaviour
     /// <summary>Один урон за текущее «окно» атаки до сброса (новая атака или AnimEvent).</summary>
     private bool meleeHitConsumed;
 
+    private int attackStateShortNameHash;
+    private bool animatorWasInAttackState;
+    private int meleeSwingNormalizedCycle = int.MinValue;
+
     private void Start()
     {
         GameObject player = GameObject.FindGameObjectWithTag("Player");
@@ -32,7 +44,50 @@ public class enemyAI : MonoBehaviour
             target = player.transform;
 
         agent = GetComponent<NavMeshAgent>();
+        ConfigurePhysicsForNavMeshCharacter();
         currentHealth = maxHealth;
+        attackStateShortNameHash = Animator.StringToHash(attackAnimatorStateShortName);
+    }
+
+    /// <summary>
+    /// Совмещение NavMeshAgent + неподвижный kinematic RB: без этого тело катится под гравитацией/физикой.
+    /// </summary>
+    private void ConfigurePhysicsForNavMeshCharacter()
+    {
+        Rigidbody rb = GetComponent<Rigidbody>();
+        if (rb == null)
+            return;
+
+        rb.isKinematic = true;
+        rb.useGravity = false;
+        rb.interpolation = RigidbodyInterpolation.None;
+        rb.constraints = RigidbodyConstraints.FreezeRotation;
+        rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
+    }
+
+    private void LateUpdate()
+    {
+        if (isDead || anim == null)
+            return;
+
+        AnimatorStateInfo st = anim.GetCurrentAnimatorStateInfo(attackAnimatorLayer);
+        bool inAttackMotion = st.shortNameHash == attackStateShortNameHash;
+
+        if (!inAttackMotion)
+        {
+            animatorWasInAttackState = false;
+            meleeSwingNormalizedCycle = int.MinValue;
+            return;
+        }
+
+        int cycle = Mathf.FloorToInt(st.normalizedTime);
+
+        // Первый кадр в состоянии attack или новый цикл клипа при loop — можно снова одно попадание.
+        if (!animatorWasInAttackState || cycle > meleeSwingNormalizedCycle)
+            meleeHitConsumed = false;
+
+        animatorWasInAttackState = true;
+        meleeSwingNormalizedCycle = cycle;
     }
 
     void Update()
@@ -87,17 +142,10 @@ public class enemyAI : MonoBehaviour
         if (attack == lastAnimAttack && run == lastAnimRun)
             return;
 
-        bool wasAttack = lastAnimAttack;
         lastAnimAttack = attack;
         lastAnimRun = run;
         anim.SetBool("isAttack", attack);
         anim.SetBool("isRun", run);
-
-        if (attack && !wasAttack)
-            meleeHitConsumed = false;
-
-        if (!attack && wasAttack)
-            meleeHitConsumed = false;
     }
 
     private void LookTarget()
@@ -129,10 +177,14 @@ public class enemyAI : MonoBehaviour
         meleeHitConsumed = false;
     }
 
-    /// <returns>Можно нанести урон триггером кулака именно сейчас — одна успешная попытка на окно атаки.</returns>
+    /// <returns>Урон возможен только в момент проигрывания состояния удара в Animator.</returns>
     public bool TryConsumeMeleeHitOnce()
     {
-        if (isDead || !isAttacking || meleeHitConsumed)
+        if (isDead || !isAttacking || meleeHitConsumed || anim == null)
+            return false;
+
+        AnimatorStateInfo st = anim.GetCurrentAnimatorStateInfo(attackAnimatorLayer);
+        if (st.shortNameHash != attackStateShortNameHash)
             return false;
 
         meleeHitConsumed = true;

@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Триггер на «кулаке»: один раз списывает удар через enemyAI.TryConsumeMeleeHit за окно атаки.
-/// Если игрок уже стоит внутри триггера в момент начала замаха — нужен OnTriggerStay; Enter не всегда сработает повторно.
+/// Триггер на «кулаке»: один раз за воспроизведение состояния атаки в Animator при условии, что в enemyAI уже включён режим атаки (bool isAttack у аниматора).
+/// OnTriggerStay — чтобы засчитать касание, если игрок не выходил из триггера между кадрами.
 /// </summary>
 [DisallowMultipleComponent]
 public class sphereTriggerDamage : MonoBehaviour
