@@ -7,12 +7,20 @@ public class enemyAI : MonoBehaviour
     NavMeshAgent agent;
     public float LookRadius;
     public Animator anim;
+
+    [Header("Melee / chase")]
+    [Tooltip("Добавляется к stoppingDistance агента: пока игрок не дальше этой суммы, враг остаётся в режиме атаки. Снимает дребезг у границы радиуса и обрывы анимации удара.")]
+    [SerializeField] private float chaseResumeExtra = 0.85f;
+
     [Header("Health")]
     [SerializeField] private float maxHealth = 100f;
     [SerializeField] private float currentHealth;
 
-    private bool isAttacking = false;
-    private bool isDead = false;
+    private bool isAttacking;
+    /// <summary>Последние значения bool в Animator — не дёргаем каждый кадр без нужды.</summary>
+    private bool lastAnimAttack;
+    private bool lastAnimRun;
+    private bool isDead;
 
     private void Start()
     {
@@ -29,36 +37,34 @@ public class enemyAI : MonoBehaviour
         if (isDead)
             return;
 
-        if (!agent.isOnNavMesh || target == null) return;
+        if (!agent.isOnNavMesh || target == null || anim == null)
+            return;
 
         float distance = Vector3.Distance(target.position, transform.position);
+        float meleeEnter = agent.stoppingDistance;
+        float meleeExit = meleeEnter + chaseResumeExtra;
 
         if (distance <= LookRadius)
         {
-            if (distance <= agent.stoppingDistance)
+            // Гистерезис: войти в атаку у stoppingDistance; выйти в бег только если игрок заметно дальше stoppingDistance.
+            bool inMelee = distance <= meleeEnter;
+            bool farEnoughToChase = distance > meleeExit;
+
+            if (inMelee || (isAttacking && !farEnoughToChase))
             {
-                // Останавливаем агента
                 agent.isStopped = true;
                 agent.ResetPath();
 
-                // Атакуем (только один раз включаем анимацию)
-                if (!isAttacking)
-                {
-                    isAttacking = true;
-                    anim.SetBool("isAttack", true);
-                    anim.SetBool("isRun", false);
-                }
+                isAttacking = true;
+                SetAnimatorCombat(true, false);
             }
             else
             {
-                // Возобновляем движение
                 agent.isStopped = false;
                 agent.SetDestination(target.position);
 
-                // Бежим
                 isAttacking = false;
-                anim.SetBool("isAttack", false);
-                anim.SetBool("isRun", true);
+                SetAnimatorCombat(false, true);
             }
 
             LookTarget();
@@ -69,9 +75,19 @@ public class enemyAI : MonoBehaviour
             agent.isStopped = true;
             agent.ResetPath();
             isAttacking = false;
-            anim.SetBool("isAttack", false);
-            anim.SetBool("isRun", false);
+            SetAnimatorCombat(false, false);
         }
+    }
+
+    private void SetAnimatorCombat(bool attack, bool run)
+    {
+        if (attack == lastAnimAttack && run == lastAnimRun)
+            return;
+
+        lastAnimAttack = attack;
+        lastAnimRun = run;
+        anim.SetBool("isAttack", attack);
+        anim.SetBool("isRun", run);
     }
 
     private void LookTarget()
