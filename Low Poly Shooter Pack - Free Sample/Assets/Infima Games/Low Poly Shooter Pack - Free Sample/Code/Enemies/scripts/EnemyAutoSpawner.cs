@@ -153,8 +153,19 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
         if (pref != null)
             return pref;
 
-        // Fallback if scene already has one enemy instance.
-        enemyAI existing = FindObjectOfType<enemyAI>();
-        return existing != null ? existing.gameObject : null;
+        // Fallback if scene already has enemy instances:
+        // prefer non-boss object names, because boss may have very different stats.
+        enemyAI[] all = FindObjectsOfType<enemyAI>();
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (all[i] == null)
+                continue;
+            string n = all[i].gameObject.name.ToLowerInvariant();
+            if (!n.Contains("boss"))
+                return all[i].gameObject;
+        }
+
+        // Last resort.
+        return all.Length > 0 && all[0] != null ? all[0].gameObject : null;
     }
 }
