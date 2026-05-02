@@ -24,6 +24,10 @@ public class enemyAI : MonoBehaviour
     [SerializeField] private float maxHealth = 100f;
     [SerializeField] private float currentHealth;
 
+    [Header("Death")]
+    [Tooltip("Через сколько секунд удалять тело с сцены после регдолла.")]
+    [SerializeField] private float corpseDestroyDelay = 45f;
+
     private bool isAttacking;
     /// <summary>Последние значения bool в Animator — не дёргаем каждый кадр без нужды.</summary>
     private bool lastAnimAttack;
@@ -204,21 +208,17 @@ public class enemyAI : MonoBehaviour
 
     private void Die()
     {
+        if (isDead)
+            return;
+
         isDead = true;
+        enabled = false;
 
-        if (agent != null)
-        {
-            agent.isStopped = true;
-            if (agent.isOnNavMesh)
-                agent.ResetPath();
-        }
+        var rootRb = GetComponent<Rigidbody>();
+        var capsule = GetComponent<CapsuleCollider>();
 
-        if (anim != null)
-        {
-            anim.SetBool("isAttack", false);
-            anim.SetBool("isRun", false);
-        }
+        EnemyDeathRagdoll.Activate(anim, agent, rootRb, capsule);
 
-        Destroy(gameObject);
+        Destroy(gameObject, Mathf.Max(1f, corpseDestroyDelay));
     }
 }
