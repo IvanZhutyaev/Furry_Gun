@@ -21,10 +21,16 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
     [SerializeField] private float footClearance = 0.04f;
     [SerializeField] private LayerMask groundMask = ~0;
     [SerializeField] private LayerMask blockingMask = ~0;
+    [Header("Boss")]
+    [SerializeField] private float bossCheckInterval = 0.5f;
+    [SerializeField] private float bossCenterSearchRadius = 20f;
+    [SerializeField] private int bossCenterSearchAttempts = 80;
 
     private readonly Collider[] overlapHits = new Collider[24];
 
     private static bool spawnedOnce;
+    private bool bossSpawned;
+    private GameObject playerObject;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -45,8 +51,8 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
         if (spawnedOnce)
             yield break;
 
-        GameObject player = GameObject.FindGameObjectWithTag("Player");
-        if (player == null)
+        playerObject = GameObject.FindGameObjectWithTag("Player");
+        if (playerObject == null)
             yield break;
 
         GameObject enemyPrefab = ResolveEnemyPrefab();
@@ -58,7 +64,7 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
 
         int spawned = 0;
         int attempts = 0;
-        Vector3 center = player.transform.position;
+        Vector3 center = playerObject.transform.position;
 
         while (spawned < spawnCount && attempts < maxSpawnAttempts)
         {
@@ -79,7 +85,87 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
         }
 
         spawnedOnce = true;
-        Destroy(gameObject);
+        StartCoroutine(SpawnBossWhenAllEnemiesDead());
+    }
+
+    private IEnumerator SpawnBossWhenAllEnemiesDead()
+    {
+        while (!bossSpawned)
+        {
+            yield return new WaitForSeconds(bossCheckInterval);
+
+            if (!HasAliveNonBossEnemies())
+            {
+                SpawnBossAtMapCenter();
+                bossSpawned = true;
+                Destroy(gameObject);
+                yield break;
+            }
+        }
+    }
+
+    private bool HasAliveNonBossEnemies()
+    {
+        enemyAI[] all = FindObjectsOfType<enemyAI>();
+        for (int i = 0; i < all.Length; i++)
+        {
+            enemyAI ai = all[i];
+            if (ai == null || !ai.enabled || !ai.gameObject.activeInHierarchy)
+                continue;
+            if (IsBoss(ai.gameObject))
+                continue;
+            return true;
+        }
+        return false;
+    }
+
+    private void SpawnBossAtMapCenter()
+    {
+        GameObject bossPrefab = ResolveBossPrefab();
+        if (bossPrefab == null)
+        {
+            Debug.LogWarning("[EnemyAutoSpawner] Boss prefab not found. Put it into Resources/Enemies/BOSS.prefab or keep one boss in scene.");
+            return;
+        }
+
+        Vector3 mapCenter = ResolveMapCenter();
+        if (!TryResolveBossSpawnPoint(mapCenter, out Vector3 spawnPos))
+        {
+            Debug.LogWarning("[EnemyAutoSpawner] Could not resolve valid boss spawn point near map center.");
+            return;
+        }
+
+        Instantiate(bossPrefab, spawnPos, Quaternion.identity);
+    }
+
+    private bool TryResolveBossSpawnPoint(Vector3 center, out Vector3 spawnPos)
+    {
+        if (TryResolveSpawnPoint(center, out spawnPos))
+            return true;
+
+        for (int i = 0; i < bossCenterSearchAttempts; i++)
+        {
+            Vector2 offset = Random.insideUnitCircle * bossCenterSearchRadius;
+            if (TryResolveSpawnPoint(center + new Vector3(offset.x, 0f, offset.y), out spawnPos))
+                return true;
+        }
+
+        spawnPos = default;
+        return false;
+    }
+
+    private Vector3 ResolveMapCenter()
+    {
+        // Most scenes with outdoor map use Terrain: its center is the map center.
+        if (Terrain.activeTerrain != null && Terrain.activeTerrain.terrainData != null)
+        {
+            Terrain t = Terrain.activeTerrain;
+            Vector3 size = t.terrainData.size;
+            return t.transform.position + new Vector3(size.x * 0.5f, 0f, size.z * 0.5f);
+        }
+
+        // Fallback: center around current player position.
+        return playerObject != null ? playerObject.transform.position : Vector3.zero;
     }
 
     private bool TryResolveSpawnPoint(Vector3 guess, out Vector3 spawnPos)
@@ -167,5 +253,32 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
 
         // Last resort.
         return all.Length > 0 && all[0] != null ? all[0].gameObject : null;
+    }
+
+    private static GameObject ResolveBossPrefab()
+    {
+        GameObject pref = Resources.Load<GameObject>("Enemies/BOSS");
+        if (pref != null) return pref;
+        pref = Resources.Load<GameObject>("BOSS");
+        if (pref != null) return pref;
+        pref = Resources.Load<GameObject>("boss");
+        if (pref != null) return pref;
+
+        enemyAI[] all = FindObjectsOfType<enemyAI>();
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (all[i] == null) continue;
+            if (IsBoss(all[i].gameObject))
+                return all[i].gameObject;
+        }
+
+        return null;
+    }
+
+    private static bool IsBoss(GameObject obj)
+    {
+        if (obj == null) return false;
+        string n = obj.name.ToLowerInvariant();
+        return n.Contains("boss");
     }
 }
