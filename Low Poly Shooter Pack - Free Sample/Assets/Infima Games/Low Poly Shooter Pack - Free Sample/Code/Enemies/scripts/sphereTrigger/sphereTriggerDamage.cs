@@ -12,7 +12,7 @@ public class sphereTriggerDamage : MonoBehaviour
     private float fallbackHitInterval = 0.8f;
 
     [SerializeField]
-    private float damage = 10f;
+    private float damage = 20f;
 
     [SerializeField]
     private string playerTag = "Player";
