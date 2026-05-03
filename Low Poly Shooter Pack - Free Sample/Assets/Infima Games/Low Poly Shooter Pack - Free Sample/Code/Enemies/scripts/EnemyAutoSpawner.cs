@@ -14,7 +14,7 @@ using UnityEditor;
 /// </summary>
 public sealed class EnemyAutoSpawner : MonoBehaviour
 {
-    [SerializeField] private int spawnCount = 24;
+    [SerializeField] private int spawnCount = 1;
     [SerializeField] private float maxDistanceFromPlayer = 100f;
     [SerializeField] private float minDistanceFromPlayer = 12f;
     [SerializeField] private float navMeshSampleRadius = 18f;
@@ -277,6 +277,7 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
         }
 
         Instantiate(bossPrefab, spawnPos, Quaternion.identity);
+        BossSpawnBanner.Show("Босс здесь!");
         AgentLog("H5", "EnemyAutoSpawner:SpawnBossAtMapCenter", "instantiate_called",
             "{\"spawnPosY\":" + spawnPos.y.ToString("R") + "}");
         return true;
