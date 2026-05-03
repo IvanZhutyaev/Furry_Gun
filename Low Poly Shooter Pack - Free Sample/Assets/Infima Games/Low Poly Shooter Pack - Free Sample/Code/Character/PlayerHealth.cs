@@ -13,20 +13,30 @@ public sealed class PlayerHealth : MonoBehaviour
 
     private float currentHealth;
     private bool gameOverTriggered;
+    private bool healthInitialized;
 
     private void Awake()
     {
-        currentHealth = maxHealth;
+        EnsureHealthInitialized();
         Log($"Старт: {FormatHealth()}");
     }
 
     public float Current => currentHealth;
     public float Max => maxHealth;
-    public bool IsDead => currentHealth <= 0f;
+    public bool IsDead => healthInitialized && currentHealth <= 0f;
+
+    private void EnsureHealthInitialized()
+    {
+        if (healthInitialized)
+            return;
+        currentHealth = maxHealth;
+        healthInitialized = true;
+    }
 
     public void TakeDamage(float amount)
     {
-        if (amount <= 0f || IsDead)
+        EnsureHealthInitialized();
+        if (amount <= 0f || currentHealth <= 0f)
             return;
 
         currentHealth = Mathf.Max(0f, currentHealth - amount);
@@ -59,6 +69,7 @@ public sealed class PlayerHealth : MonoBehaviour
     /// <summary>Дебаг или UI.</summary>
     public void RestoreFull()
     {
+        EnsureHealthInitialized();
         currentHealth = maxHealth;
         Log($"Восстановление до максимума: {FormatHealth()}");
     }
@@ -66,6 +77,7 @@ public sealed class PlayerHealth : MonoBehaviour
     /// <summary>Повышение макс. HP и текущего HP на ту же величину (стадии прогрессии).</summary>
     public void ApplyMaxHealthIncrease(float delta)
     {
+        EnsureHealthInitialized();
         if (delta <= 0f)
             return;
 

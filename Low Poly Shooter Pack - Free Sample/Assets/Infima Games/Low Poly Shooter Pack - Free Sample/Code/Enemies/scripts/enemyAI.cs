@@ -157,9 +157,9 @@ public class enemyAI : MonoBehaviour
 
                 // При переходе в бег даём Animator один короткий шаг, чтобы ноги не "залипали" на месте.
                 if (!wasChasingLastFrame)
-                    runMovementUnlockTime = Time.time + Mathf.Max(0f, runAnimationLeadTime);
+                    runMovementUnlockTime = Time.unscaledTime + Mathf.Max(0f, runAnimationLeadTime);
 
-                bool canMoveNow = Time.time >= runMovementUnlockTime;
+                bool canMoveNow = Time.unscaledTime >= runMovementUnlockTime;
                 if (canMoveNow)
                 {
                     agent.isStopped = false;
@@ -231,7 +231,7 @@ public class enemyAI : MonoBehaviour
     /// <returns>Урон возможен только в момент проигрывания состояния удара в Animator.</returns>
     public bool TryConsumeMeleeHitOnce()
     {
-        if (isDead || !isAttacking || meleeHitConsumed || anim == null || Time.time < meleeGlobalNextHitTime)
+        if (isDead || !isAttacking || meleeHitConsumed || anim == null || Time.unscaledTime < meleeGlobalNextHitTime)
             return false;
 
         AnimatorStateInfo st = anim.GetCurrentAnimatorStateInfo(attackAnimatorLayer);
@@ -239,7 +239,7 @@ public class enemyAI : MonoBehaviour
             return false;
 
         meleeHitConsumed = true;
-        meleeGlobalNextHitTime = Time.time + Mathf.Max(0.05f, meleeGlobalHitCooldown);
+        meleeGlobalNextHitTime = Time.unscaledTime + Mathf.Max(0.05f, meleeGlobalHitCooldown);
         return true;
     }
 
@@ -263,11 +263,11 @@ public class enemyAI : MonoBehaviour
 
         // Fallback используется только когда attack-state не распознан (сбитый layer/name/контроллер).
         float nextAllowedTime = Mathf.Max(meleeFallbackNextHitTime, meleeGlobalNextHitTime);
-        if (Time.time < nextAllowedTime)
+        if (Time.unscaledTime < nextAllowedTime)
             return false;
 
-        meleeFallbackNextHitTime = Time.time + Mathf.Max(0.05f, fallbackInterval);
-        meleeGlobalNextHitTime = Time.time + Mathf.Max(0.05f, meleeGlobalHitCooldown);
+        meleeFallbackNextHitTime = Time.unscaledTime + Mathf.Max(0.05f, fallbackInterval);
+        meleeGlobalNextHitTime = Time.unscaledTime + Mathf.Max(0.05f, meleeGlobalHitCooldown);
         return true;
     }
 
