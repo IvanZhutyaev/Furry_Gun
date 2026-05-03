@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.SceneManagement;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -104,7 +105,31 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
         go.AddComponent<EnemyAutoSpawner>();
     }
 
+    private void OnEnable()
+    {
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    private void OnDisable()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (spawnedOnce)
+            return;
+        StopAllCoroutines();
+        StartCoroutine(RunSpawnAttempt());
+    }
+
     private IEnumerator Start()
+    {
+        yield return RunSpawnAttempt();
+    }
+
+    /// <summary>Повтор при смене сцены (например главное меню без игрока → уровень с игроком).</summary>
+    private IEnumerator RunSpawnAttempt()
     {
         // Wait one frame so Player/NavMesh in scene are initialized.
         yield return null;
