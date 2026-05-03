@@ -105,6 +105,23 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
         go.AddComponent<EnemyAutoSpawner>();
     }
 
+    /// <summary>Пересоздать спавнер и разрешить новую волну (Try Again / старт с главного меню).</summary>
+    public static void PrepareNewRun()
+    {
+        spawnedOnce = false;
+
+        EnemyAutoSpawner[] existing = Object.FindObjectsByType<EnemyAutoSpawner>(FindObjectsSortMode.None);
+        for (int i = 0; i < existing.Length; i++)
+        {
+            if (existing[i] != null)
+                Object.Destroy(existing[i].gameObject);
+        }
+
+        GameObject go = new GameObject("Enemy Auto Spawner");
+        Object.DontDestroyOnLoad(go);
+        go.AddComponent<EnemyAutoSpawner>();
+    }
+
     private void OnEnable()
     {
         SceneManager.sceneLoaded += OnSceneLoaded;

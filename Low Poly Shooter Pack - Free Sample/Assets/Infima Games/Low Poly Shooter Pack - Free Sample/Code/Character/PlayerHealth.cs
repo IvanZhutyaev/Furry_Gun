@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Простое здоровье игрока. Повесь на корень объекта с тегом Player (рядом с Character / коллайдером).
@@ -6,6 +7,9 @@ using UnityEngine;
 public sealed class PlayerHealth : MonoBehaviour
 {
     [SerializeField] private float maxHealth = 100f;
+
+    [Tooltip("Сцена с экраном смерти (имя файла сцены, напр. YouDied).")]
+    [SerializeField] private string gameOverSceneName = "YouDied";
 
     [Header("Debug")]
     [SerializeField]
@@ -53,17 +57,14 @@ public sealed class PlayerHealth : MonoBehaviour
 
         gameOverTriggered = true;
 
-        Log($"Смерть. {FormatHealth()} — завершение игры");
+        Log($"Смерть. {FormatHealth()} — экран game over");
 
         Cursor.visible = true;
         Cursor.lockState = CursorLockMode.None;
-        Time.timeScale = 0f;
+        Time.timeScale = 1f;
 
-#if UNITY_EDITOR
-        UnityEditor.EditorApplication.ExitPlaymode();
-#else
-        Application.Quit();
-#endif
+        if (!string.IsNullOrEmpty(gameOverSceneName))
+            SceneManager.LoadScene(gameOverSceneName);
     }
 
     /// <summary>Дебаг или UI.</summary>

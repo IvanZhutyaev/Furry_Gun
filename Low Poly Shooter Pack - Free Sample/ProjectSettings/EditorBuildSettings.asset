@@ -11,6 +11,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Map/Scenes/1.unity
     guid: e8a7d5649ac14f944a57a23f0b9f8a81
+  - enabled: 1
+    path: Assets/Furry_Gun/Scenes/YouDied.unity
+    guid: c1d2e3f4a5b60718293a4b5c6d7e8f91
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f,
       type: 2}

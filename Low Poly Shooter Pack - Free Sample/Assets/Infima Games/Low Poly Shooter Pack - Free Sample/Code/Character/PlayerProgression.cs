@@ -21,6 +21,13 @@ public static class PlayerProgression
 
     public static event Action<int> StageChanged;
 
+    /// <summary>Сброс стадий и счётчика убийств (новая игра / Try Again).</summary>
+    public static void ResetRun()
+    {
+        KillCount = 0;
+        CurrentStage = 1;
+    }
+
     public static void RegisterEnemyKill()
     {
         KillCount++;

@@ -7,12 +7,12 @@ using UnityEngine.UI;
 using UnityEngine.InputSystem.UI;
 #endif
 
-/// <summary>Собирает главное меню (Furry_Gun, Start, Exit) при загрузке сцены.</summary>
+/// <summary>Экран смерти: You Died!, Try Again (карта 1 заново), Exit.</summary>
 [DisallowMultipleComponent]
-public sealed class FurryGunMainMenu : MonoBehaviour
+public sealed class GameOverMenu : MonoBehaviour
 {
     [SerializeField] private string gameSceneName = "1";
-    [SerializeField] private Color backgroundColor = new Color(0.11f, 0.09f, 0.13f, 1f);
+    [SerializeField] private Color backgroundColor = new Color(0.18f, 0.06f, 0.06f, 1f);
 
     private void Awake()
     {
@@ -64,7 +64,7 @@ public sealed class FurryGunMainMenu : MonoBehaviour
         root.offsetMax = Vector2.zero;
 
         CreateTitle(canvas.transform);
-        CreateButton(canvas.transform, "Start", new Vector2(0, 50), OnStartClicked);
+        CreateButton(canvas.transform, "Try Again", new Vector2(0, 50), OnTryAgainClicked);
         CreateButton(canvas.transform, "Exit", new Vector2(0, -70), OnExitClicked);
     }
 
@@ -78,17 +78,17 @@ public sealed class FurryGunMainMenu : MonoBehaviour
         rt.sizeDelta = new Vector2(1000, 160);
         go.AddComponent<CanvasRenderer>();
         var text = go.AddComponent<Text>();
-        text.text = "Furry_Gun";
+        text.text = "You Died!";
         text.font = MenuFont;
         text.fontSize = 86;
         text.alignment = TextAnchor.MiddleCenter;
-        text.color = Color.white;
+        text.color = new Color(1f, 0.4f, 0.35f, 1f);
         text.fontStyle = FontStyle.Bold;
     }
 
     private void CreateButton(Transform parent, string label, Vector2 anchoredPos, UnityAction onClick)
     {
-        var go = new GameObject(label + "Button");
+        var go = new GameObject(label.Replace(" ", "") + "Button");
         go.transform.SetParent(parent, false);
         var rt = go.AddComponent<RectTransform>();
         rt.anchorMin = new Vector2(0.5f, 0.5f);
@@ -98,13 +98,13 @@ public sealed class FurryGunMainMenu : MonoBehaviour
 
         go.AddComponent<CanvasRenderer>();
         var img = go.AddComponent<Image>();
-        img.color = new Color(0.22f, 0.42f, 0.32f, 1f);
+        img.color = new Color(0.35f, 0.18f, 0.18f, 1f);
 
         var btn = go.AddComponent<Button>();
         btn.targetGraphic = img;
         var colors = btn.colors;
-        colors.highlightedColor = new Color(0.32f, 0.58f, 0.44f, 1f);
-        colors.pressedColor = new Color(0.16f, 0.3f, 0.24f, 1f);
+        colors.highlightedColor = new Color(0.5f, 0.28f, 0.25f, 1f);
+        colors.pressedColor = new Color(0.25f, 0.12f, 0.12f, 1f);
         btn.colors = colors;
         btn.onClick.AddListener(onClick);
 
@@ -119,7 +119,7 @@ public sealed class FurryGunMainMenu : MonoBehaviour
         var text = textGo.AddComponent<Text>();
         text.text = label;
         text.font = MenuFont;
-        text.fontSize = 32;
+        text.fontSize = 30;
         text.alignment = TextAnchor.MiddleCenter;
         text.color = Color.white;
     }
@@ -138,7 +138,7 @@ public sealed class FurryGunMainMenu : MonoBehaviour
         }
     }
 
-    private void OnStartClicked()
+    private void OnTryAgainClicked()
     {
         Time.timeScale = 1f;
         PlayerProgression.ResetRun();
