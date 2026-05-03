@@ -57,6 +57,9 @@ public class enemyAI : MonoBehaviour
     private bool wasChasingLastFrame;
     private float runMovementUnlockTime;
 
+    /// <summary>Игрок нанёс урон с любой дистанции — преследуем как при входе в LookRadius.</summary>
+    private bool aggroFromDamage;
+
     private void Start()
     {
         GameObject player = GameObject.FindGameObjectWithTag("Player");
@@ -67,6 +70,16 @@ public class enemyAI : MonoBehaviour
         ConfigurePhysicsForNavMeshCharacter();
         currentHealth = maxHealth;
         attackStateShortNameHash = Animator.StringToHash(attackAnimatorStateShortName);
+    }
+
+    private void EnsurePlayerTarget()
+    {
+        if (target != null)
+            return;
+
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null)
+            target = player.transform;
     }
 
     /// <summary>
@@ -122,7 +135,7 @@ public class enemyAI : MonoBehaviour
         float meleeEnter = agent.stoppingDistance;
         float meleeExit = meleeEnter + chaseResumeExtra;
 
-        if (distance <= LookRadius)
+        if (distance <= LookRadius || aggroFromDamage)
         {
             // Гистерезис: войти в атаку у stoppingDistance; выйти в бег только если игрок заметно дальше stoppingDistance.
             bool inMelee = distance <= meleeEnter;
@@ -263,6 +276,12 @@ public class enemyAI : MonoBehaviour
         if (isDead)
             return;
 
+        if (damage > 0f)
+        {
+            EnsurePlayerTarget();
+            aggroFromDamage = true;
+        }
+
         currentHealth = Mathf.Max(0f, currentHealth - damage);
 
         if (currentHealth <= 0f)
@@ -299,6 +318,7 @@ public class enemyAI : MonoBehaviour
 
         isDead = true;
         enabled = false;
+        aggroFromDamage = false;
 
         var rootRb = GetComponent<Rigidbody>();
         var capsule = GetComponent<CapsuleCollider>();
