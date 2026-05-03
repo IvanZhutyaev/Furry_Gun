@@ -13,7 +13,7 @@ using UnityEditor;
 /// </summary>
 public sealed class EnemyAutoSpawner : MonoBehaviour
 {
-    [SerializeField] private int spawnCount = 1;
+    [SerializeField] private int spawnCount = 24;
     [SerializeField] private float maxDistanceFromPlayer = 100f;
     [SerializeField] private float minDistanceFromPlayer = 12f;
     [SerializeField] private float navMeshSampleRadius = 18f;

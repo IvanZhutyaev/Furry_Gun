@@ -317,6 +317,7 @@ public class enemyAI : MonoBehaviour
             return;
 
         isDead = true;
+        PlayerProgression.RegisterEnemyKill();
         enabled = false;
         aggroFromDamage = false;
 

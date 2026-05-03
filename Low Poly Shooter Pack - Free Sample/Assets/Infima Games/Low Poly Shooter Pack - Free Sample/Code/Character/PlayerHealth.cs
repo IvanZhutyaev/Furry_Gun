@@ -63,6 +63,17 @@ public sealed class PlayerHealth : MonoBehaviour
         Log($"Восстановление до максимума: {FormatHealth()}");
     }
 
+    /// <summary>Повышение макс. HP и текущего HP на ту же величину (стадии прогрессии).</summary>
+    public void ApplyMaxHealthIncrease(float delta)
+    {
+        if (delta <= 0f)
+            return;
+
+        maxHealth += delta;
+        currentHealth += delta;
+        Log($"Стадия: +{delta:F0} HP → {FormatHealth()}");
+    }
+
     private string FormatHealth()
     {
         float pct = maxHealth > 0f ? 100f * currentHealth / maxHealth : 0f;

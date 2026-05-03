@@ -27,6 +27,8 @@ public class Projectile : MonoBehaviour {
 
 	private void Start ()
 	{
+		damage += PlayerProgression.ProjectileDamageBonus;
+
 		//Grab the game mode service, we need it to access the player character!
 		var gameModeService = ServiceLocator.Current.Get<IGameModeService>();
 		//Ignore the main player character's collision. A little hacky, but it should work.

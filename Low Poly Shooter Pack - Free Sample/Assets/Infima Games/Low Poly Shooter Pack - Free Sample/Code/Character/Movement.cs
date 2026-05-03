@@ -154,6 +154,15 @@ namespace InfimaGames.LowPolyShooterPack
 
         #region METHODS
 
+        /// <summary>Бонус скорости бега от стадий прогрессии.</summary>
+        public void ApplyRunSpeedBonus(float delta)
+        {
+            if (delta <= 0f)
+                return;
+
+            speedRunning = Mathf.Max(0.1f, speedRunning + delta);
+        }
+
         private void MoveCharacter()
         {
             #region Calculate Movement Velocity
