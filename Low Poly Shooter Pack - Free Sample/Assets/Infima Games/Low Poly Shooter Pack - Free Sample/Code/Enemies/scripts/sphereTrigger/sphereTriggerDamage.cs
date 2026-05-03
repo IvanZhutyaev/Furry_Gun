@@ -7,8 +7,12 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class sphereTriggerDamage : MonoBehaviour
 {
+    [Tooltip("Fallback-интервал урона, если Animator-окно удара не распознано.")]
     [SerializeField]
-    private float damage = 15f;
+    private float fallbackHitInterval = 0.8f;
+
+    [SerializeField]
+    private float damage = 10f;
 
     [SerializeField]
     private string playerTag = "Player";
@@ -34,16 +38,22 @@ public class sphereTriggerDamage : MonoBehaviour
 
     private void OnTriggerStay(Collider other)
     {
-        if (!other.CompareTag(playerTag))
+        // У игрока часто несколько дочерних коллайдеров без тега Player:
+        // допускаем попадание, если тег на root ИЛИ найден PlayerHealth в иерархии.
+        if (!IsPlayerHit(other, out PlayerHealth hp))
             return;
 
         if (owner == null)
             owner = GetComponentInParent<enemyAI>();
 
-        if (owner == null || !owner.TryConsumeMeleeHitOnce())
+        if (owner == null)
             return;
 
-        ApplyDamageToPlayer(other.gameObject);
+        // Animator-first logic with safe fallback (prevents zero-damage when state name/layer mismatch).
+        if (!owner.TryConsumeMeleeHit(fallbackHitInterval))
+            return;
+
+        hp.TakeDamage(damage);
     }
 
     /// <summary>Если понадобится отдельно от триггерной геометрии.</summary>
@@ -52,16 +62,26 @@ public class sphereTriggerDamage : MonoBehaviour
         owner = GetComponentInParent<enemyAI>();
     }
 
-    private void ApplyDamageToPlayer(GameObject hitObject)
+    public void SetDamage(float value)
     {
-        if (hitObject.TryGetComponent<PlayerHealth>(out var hp))
-        {
-            hp.TakeDamage(damage);
-            return;
-        }
+        damage = Mathf.Max(0f, value);
+    }
 
-        hp = hitObject.GetComponentInParent<PlayerHealth>();
-        if (hp != null)
-            hp.TakeDamage(damage);
+    private bool IsPlayerHit(Collider other, out PlayerHealth hp)
+    {
+        hp = null;
+        if (other == null)
+            return false;
+
+        if (other.TryGetComponent(out hp))
+            return true;
+
+        hp = other.GetComponentInParent<PlayerHealth>();
+        if (hp == null)
+            return false;
+
+        // Оставляем фильтр по тегу для совместимости, но не требуем его на дочернем коллайдере.
+        Transform root = other.transform.root;
+        return other.CompareTag(playerTag) || (root != null && root.CompareTag(playerTag));
     }
 }

@@ -1,6 +1,11 @@
 using System.Collections;
+using System.IO;
+using System.Text;
 using UnityEngine;
 using UnityEngine.AI;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 /// <summary>
 /// Auto-spawns enemies at game start around the player.
@@ -8,7 +13,7 @@ using UnityEngine.AI;
 /// </summary>
 public sealed class EnemyAutoSpawner : MonoBehaviour
 {
-    [SerializeField] private int spawnCount = 50;
+    [SerializeField] private int spawnCount = 1;
     [SerializeField] private float maxDistanceFromPlayer = 100f;
     [SerializeField] private float minDistanceFromPlayer = 12f;
     [SerializeField] private float navMeshSampleRadius = 18f;
@@ -25,12 +30,68 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
     [SerializeField] private float bossCheckInterval = 0.5f;
     [SerializeField] private float bossCenterSearchRadius = 20f;
     [SerializeField] private int bossCenterSearchAttempts = 80;
+    [Tooltip("Множитель высоты/радиуса капсулы проверки свободного места при спавне босса относительно обычного врага.")]
+    [SerializeField] private float bossSpawnCapsuleScale = 4f;
+
+    private const string EditorBossPrefabPath =
+        "Assets/Infima Games/Low Poly Shooter Pack - Free Sample/Code/Enemies/BOSS.prefab";
 
     private readonly Collider[] overlapHits = new Collider[24];
 
     private static bool spawnedOnce;
     private bool bossSpawned;
     private GameObject playerObject;
+
+    #region agent log
+    private static void AgentLog(string hypothesisId, string location, string message, string dataJsonObject)
+    {
+        try
+        {
+            long ts = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var sb = new StringBuilder(256);
+            sb.Append("{\"sessionId\":\"218006\",\"hypothesisId\":\"").Append(hypothesisId)
+                .Append("\",\"location\":\"").Append(location.Replace("\\", "/"))
+                .Append("\",\"message\":\"").Append(message.Replace("\\", "\\\\").Replace("\"", "\\\""))
+                .Append("\",\"timestamp\":").Append(ts).Append(",\"data\":").Append(string.IsNullOrEmpty(dataJsonObject) ? "{}" : dataJsonObject).Append("}\n");
+            string line = sb.ToString();
+            string projectLog = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "debug-218006.log"));
+            File.AppendAllText(projectLog, line, Encoding.UTF8);
+            File.AppendAllText(Path.Combine(Application.persistentDataPath, "debug-218006.log"), line, Encoding.UTF8);
+        }
+        catch
+        {
+            // ignored — debug ingest must never break play mode
+        }
+    }
+
+    private static string BuildEnemyBlockingSnapshotJson()
+    {
+        enemyAI[] all = FindObjectsOfType<enemyAI>();
+        int blockingNonBoss = 0;
+        int bossLike = 0;
+        int disabledNonBoss = 0;
+        for (int i = 0; i < all.Length; i++)
+        {
+            enemyAI ai = all[i];
+            if (ai == null)
+                continue;
+            bool boss = IsBoss(ai.gameObject);
+            if (boss)
+            {
+                bossLike++;
+                continue;
+            }
+
+            if (!ai.enabled || !ai.gameObject.activeInHierarchy)
+                disabledNonBoss++;
+            else
+                blockingNonBoss++;
+        }
+
+        return "{\"enemyAiTotal\":" + all.Length + ",\"blockingNonBoss\":" + blockingNonBoss +
+               ",\"bossLike\":" + bossLike + ",\"disabledOrInactiveNonBoss\":" + disabledNonBoss + "}";
+    }
+    #endregion
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -49,16 +110,23 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
         yield return null;
 
         if (spawnedOnce)
+        {
+            AgentLog("H2", "EnemyAutoSpawner:Start", "early_exit_spawned_once", "{}");
             yield break;
+        }
 
         playerObject = GameObject.FindGameObjectWithTag("Player");
         if (playerObject == null)
+        {
+            AgentLog("H2", "EnemyAutoSpawner:Start", "early_exit_no_player", "{}");
             yield break;
+        }
 
         GameObject enemyPrefab = ResolveEnemyPrefab();
         if (enemyPrefab == null)
         {
             Debug.LogWarning("[EnemyAutoSpawner] Enemy prefab not found. Put prefab into Resources/Enemies/enemy.prefab or keep one enemy in scene.");
+            AgentLog("H2", "EnemyAutoSpawner:Start", "early_exit_no_enemy_prefab", "{}");
             yield break;
         }
 
@@ -85,21 +153,63 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
         }
 
         spawnedOnce = true;
+        AgentLog("H2", "EnemyAutoSpawner:Start", "wave_complete_start_boss_coroutine",
+            "{\"spawned\":" + spawned + ",\"attempts\":" + attempts + "}");
         StartCoroutine(SpawnBossWhenAllEnemiesDead());
     }
 
     private IEnumerator SpawnBossWhenAllEnemiesDead()
     {
+        bool loggedSnapshot;
+        loggedSnapshot = false;
         while (!bossSpawned)
         {
             yield return new WaitForSeconds(bossCheckInterval);
 
-            if (!HasAliveNonBossEnemies())
+            if (!loggedSnapshot)
             {
-                SpawnBossAtMapCenter();
-                bossSpawned = true;
-                Destroy(gameObject);
-                yield break;
+                loggedSnapshot = true;
+                AgentLog("H3", "EnemyAutoSpawner:SpawnBossWhenAllEnemiesDead", "first_tick_snapshot",
+                    BuildEnemyBlockingSnapshotJson());
+            }
+
+            bool anyBlocking = HasAliveNonBossEnemies();
+            if (!anyBlocking)
+            {
+                AgentLog("H3", "EnemyAutoSpawner:SpawnBossWhenAllEnemiesDead", "no_blocking_non_boss_try_spawn",
+                    BuildEnemyBlockingSnapshotJson());
+
+                GameObject bossPrefabBefore = ResolveBossPrefab();
+                AgentLog("H1", "EnemyAutoSpawner:SpawnBossWhenAllEnemiesDead", "boss_prefab_resolve",
+                    "{\"prefabNull\":" + (bossPrefabBefore == null ? "true" : "false") +
+                    ",\"prefabName\":\"" + (bossPrefabBefore != null ? bossPrefabBefore.name.Replace("\"", "'") : "") + "\"}");
+
+                if (bossPrefabBefore == null)
+                {
+                    Debug.LogError(
+                        "[EnemyAutoSpawner] Префаб босса не найден: в билде положите копию в Assets/Resources/Enemies/BOSS.prefab " +
+                        "(Resources.Load(\"Enemies/BOSS\")). В редакторе Play Mode используется путь к ассету из скрипта.");
+                    AgentLog("H1", "EnemyAutoSpawner:SpawnBossWhenAllEnemiesDead", "abort_no_prefab_stop_coroutine",
+                        "{}");
+                    bossSpawned = true;
+                    Destroy(gameObject);
+                    yield break;
+                }
+
+                bool spawnOk = SpawnBossAtMapCenterWithResult();
+
+                AgentLog("H4", "EnemyAutoSpawner:SpawnBossWhenAllEnemiesDead", "spawn_result",
+                    "{\"spawnOk\":" + (spawnOk ? "true" : "false") + "}");
+
+                if (spawnOk)
+                {
+                    bossSpawned = true;
+                    Destroy(gameObject);
+                    yield break;
+                }
+
+                // Prefab есть, но точка спавна не прошла — повторим на следующем тике (например другой random offset).
+                continue;
             }
         }
     }
@@ -119,34 +229,46 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
         return false;
     }
 
-    private void SpawnBossAtMapCenter()
+    /// <returns>True if boss instance was created.</returns>
+    private bool SpawnBossAtMapCenterWithResult()
     {
         GameObject bossPrefab = ResolveBossPrefab();
         if (bossPrefab == null)
         {
             Debug.LogWarning("[EnemyAutoSpawner] Boss prefab not found. Put it into Resources/Enemies/BOSS.prefab or keep one boss in scene.");
-            return;
+            AgentLog("H1", "EnemyAutoSpawner:SpawnBossAtMapCenter", "abort_prefab_null", "{}");
+            return false;
         }
 
         Vector3 mapCenter = ResolveMapCenter();
+        AgentLog("H4", "EnemyAutoSpawner:SpawnBossAtMapCenter", "map_center",
+            "{\"x\":" + mapCenter.x.ToString("R") + ",\"y\":" + mapCenter.y.ToString("R") + ",\"z\":" + mapCenter.z.ToString("R") + "}");
+
         if (!TryResolveBossSpawnPoint(mapCenter, out Vector3 spawnPos))
         {
             Debug.LogWarning("[EnemyAutoSpawner] Could not resolve valid boss spawn point near map center.");
-            return;
+            AgentLog("H4", "EnemyAutoSpawner:SpawnBossAtMapCenter", "abort_spawn_point_unresolved", "{}");
+            return false;
         }
 
         Instantiate(bossPrefab, spawnPos, Quaternion.identity);
+        AgentLog("H5", "EnemyAutoSpawner:SpawnBossAtMapCenter", "instantiate_called",
+            "{\"spawnPosY\":" + spawnPos.y.ToString("R") + "}");
+        return true;
     }
 
     private bool TryResolveBossSpawnPoint(Vector3 center, out Vector3 spawnPos)
     {
-        if (TryResolveSpawnPoint(center, out spawnPos))
+        float bh = enemyCapsuleHeight * bossSpawnCapsuleScale;
+        float br = enemyCapsuleRadius * bossSpawnCapsuleScale;
+
+        if (TryResolveSpawnPoint(center, out spawnPos, bh, br))
             return true;
 
         for (int i = 0; i < bossCenterSearchAttempts; i++)
         {
             Vector2 offset = Random.insideUnitCircle * bossCenterSearchRadius;
-            if (TryResolveSpawnPoint(center + new Vector3(offset.x, 0f, offset.y), out spawnPos))
+            if (TryResolveSpawnPoint(center + new Vector3(offset.x, 0f, offset.y), out spawnPos, bh, br))
                 return true;
         }
 
@@ -169,6 +291,11 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
     }
 
     private bool TryResolveSpawnPoint(Vector3 guess, out Vector3 spawnPos)
+    {
+        return TryResolveSpawnPoint(guess, out spawnPos, enemyCapsuleHeight, enemyCapsuleRadius);
+    }
+
+    private bool TryResolveSpawnPoint(Vector3 guess, out Vector3 spawnPos, float capsuleHeight, float capsuleRadius)
     {
         Vector3 candidate = guess;
 
@@ -193,13 +320,13 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
 
         // Volume clearance check (avoids trees/rocks/walls and any overlaps).
         Vector3 p = groundHit.point;
-        Vector3 bottom = p + Vector3.up * (enemyCapsuleRadius + footClearance);
-        Vector3 top = p + Vector3.up * Mathf.Max(enemyCapsuleRadius + footClearance, enemyCapsuleHeight - enemyCapsuleRadius);
+        Vector3 bottom = p + Vector3.up * (capsuleRadius + footClearance);
+        Vector3 top = p + Vector3.up * Mathf.Max(capsuleRadius + footClearance, capsuleHeight - capsuleRadius);
 
         int hitCount = Physics.OverlapCapsuleNonAlloc(
             bottom,
             top,
-            enemyCapsuleRadius,
+            capsuleRadius,
             overlapHits,
             blockingMask,
             QueryTriggerInteraction.Ignore
@@ -255,7 +382,7 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
         return all.Length > 0 && all[0] != null ? all[0].gameObject : null;
     }
 
-    private static GameObject ResolveBossPrefab()
+    private GameObject ResolveBossPrefab()
     {
         GameObject pref = Resources.Load<GameObject>("Enemies/BOSS");
         if (pref != null) return pref;
@@ -263,6 +390,13 @@ public sealed class EnemyAutoSpawner : MonoBehaviour
         if (pref != null) return pref;
         pref = Resources.Load<GameObject>("boss");
         if (pref != null) return pref;
+
+#if UNITY_EDITOR
+        // Префаб лежит вне Resources — в Play Mode в редакторе грузим напрямую по пути ассета.
+        pref = AssetDatabase.LoadAssetAtPath<GameObject>(EditorBossPrefabPath);
+        if (pref != null)
+            return pref;
+#endif
 
         enemyAI[] all = FindObjectsOfType<enemyAI>();
         for (int i = 0; i < all.Length; i++)

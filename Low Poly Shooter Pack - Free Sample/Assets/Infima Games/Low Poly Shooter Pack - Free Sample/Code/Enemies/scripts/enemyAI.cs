@@ -16,7 +16,9 @@ public class enemyAI : MonoBehaviour
 
     [Header("Melee / chase")]
     [Tooltip("Добавляется к stoppingDistance агента: пока игрок не дальше этой суммы, враг остаётся в режиме атаки. Снимает дребезг у границы радиуса и обрывы анимации удара.")]
-    [SerializeField] private float chaseResumeExtra = 0.85f;
+    [SerializeField] private float chaseResumeExtra = 0.25f;
+    [Tooltip("Короткая задержка перед стартом движения, чтобы анимация бега успела начаться.")]
+    [SerializeField] private float runAnimationLeadTime = 0.08f;
 
     [Header("Melee / animator")]
     [Tooltip("Short name состояния с клипом удара на Base Layer (в enemyAnimController — «attack»). Каждый новый заход в это состояние = ещё один возможный хит.")]
@@ -25,6 +27,8 @@ public class enemyAI : MonoBehaviour
 
     [SerializeField]
     private int attackAnimatorLayer;
+    [Tooltip("Минимальный интервал между любыми успешными мили-попаданиями этого врага.")]
+    [SerializeField] private float meleeGlobalHitCooldown = 0.35f;
 
     [Header("Health")]
     [SerializeField] private float maxHealth = 100f;
@@ -48,6 +52,10 @@ public class enemyAI : MonoBehaviour
     private int attackStateShortNameHash;
     private bool animatorWasInAttackState;
     private int meleeSwingNormalizedCycle = int.MinValue;
+    private float meleeFallbackNextHitTime;
+    private float meleeGlobalNextHitTime;
+    private bool wasChasingLastFrame;
+    private float runMovementUnlockTime;
 
     private void Start()
     {
@@ -127,14 +135,30 @@ public class enemyAI : MonoBehaviour
 
                 isAttacking = true;
                 SetAnimatorCombat(true, false);
+                wasChasingLastFrame = false;
             }
             else
             {
-                agent.isStopped = false;
-                agent.SetDestination(target.position);
-
                 isAttacking = false;
                 SetAnimatorCombat(false, true);
+
+                // При переходе в бег даём Animator один короткий шаг, чтобы ноги не "залипали" на месте.
+                if (!wasChasingLastFrame)
+                    runMovementUnlockTime = Time.time + Mathf.Max(0f, runAnimationLeadTime);
+
+                bool canMoveNow = Time.time >= runMovementUnlockTime;
+                if (canMoveNow)
+                {
+                    agent.isStopped = false;
+                    agent.SetDestination(target.position);
+                }
+                else
+                {
+                    agent.isStopped = true;
+                    agent.ResetPath();
+                }
+
+                wasChasingLastFrame = true;
             }
 
             LookTarget();
@@ -146,6 +170,7 @@ public class enemyAI : MonoBehaviour
             agent.ResetPath();
             isAttacking = false;
             SetAnimatorCombat(false, false);
+            wasChasingLastFrame = false;
         }
     }
 
@@ -186,13 +211,14 @@ public class enemyAI : MonoBehaviour
     /// </summary>
     public void AnimEvent_MeleeSwingStart()
     {
-        meleeHitConsumed = false;
+        // Disabled for strict one-hit-per-attack-state logic.
+        // Reset happens only on animator state enter/new cycle in LateUpdate.
     }
 
     /// <returns>Урон возможен только в момент проигрывания состояния удара в Animator.</returns>
     public bool TryConsumeMeleeHitOnce()
     {
-        if (isDead || !isAttacking || meleeHitConsumed || anim == null)
+        if (isDead || !isAttacking || meleeHitConsumed || anim == null || Time.time < meleeGlobalNextHitTime)
             return false;
 
         AnimatorStateInfo st = anim.GetCurrentAnimatorStateInfo(attackAnimatorLayer);
@@ -200,6 +226,35 @@ public class enemyAI : MonoBehaviour
             return false;
 
         meleeHitConsumed = true;
+        meleeGlobalNextHitTime = Time.time + Mathf.Max(0.05f, meleeGlobalHitCooldown);
+        return true;
+    }
+
+    /// <summary>
+    /// Общая проверка нанесения урона: сначала штатный animator-hit, затем fallback с общим кулдауном на врага.
+    /// </summary>
+    public bool TryConsumeMeleeHit(float fallbackInterval)
+    {
+        if (isDead || !isAttacking)
+            return false;
+
+        // Если атака корректно распознана в Animator, урон только через "один раз за swing".
+        // Это убирает второй хит на обратном движении руки.
+        if (anim != null)
+        {
+            AnimatorStateInfo st = anim.GetCurrentAnimatorStateInfo(attackAnimatorLayer);
+            bool inAttackMotion = st.shortNameHash == attackStateShortNameHash;
+            if (inAttackMotion)
+                return TryConsumeMeleeHitOnce();
+        }
+
+        // Fallback используется только когда attack-state не распознан (сбитый layer/name/контроллер).
+        float nextAllowedTime = Mathf.Max(meleeFallbackNextHitTime, meleeGlobalNextHitTime);
+        if (Time.time < nextAllowedTime)
+            return false;
+
+        meleeFallbackNextHitTime = Time.time + Mathf.Max(0.05f, fallbackInterval);
+        meleeGlobalNextHitTime = Time.time + Mathf.Max(0.05f, meleeGlobalHitCooldown);
         return true;
     }
 
@@ -212,6 +267,29 @@ public class enemyAI : MonoBehaviour
 
         if (currentHealth <= 0f)
             Die();
+    }
+
+    public void ConfigureBossStats(float health, float lookRadius, float meleeDamage, float moveSpeed, float stoppingDistance)
+    {
+        maxHealth = Mathf.Max(1f, health);
+        currentHealth = maxHealth;
+        LookRadius = Mathf.Max(1f, lookRadius);
+
+        NavMeshAgent nav = GetComponent<NavMeshAgent>();
+        if (nav != null)
+        {
+            nav.speed = Mathf.Max(0.1f, moveSpeed);
+            nav.stoppingDistance = Mathf.Max(0f, stoppingDistance);
+        }
+
+        sphereTriggerDamage[] triggers = GetComponentsInChildren<sphereTriggerDamage>(true);
+        for (int i = 0; i < triggers.Length; i++)
+        {
+            if (triggers[i] == null)
+                continue;
+            triggers[i].SetDamage(meleeDamage);
+            triggers[i].RefreshOwnerCache();
+        }
     }
 
     private void Die()

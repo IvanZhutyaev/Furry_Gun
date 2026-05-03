@@ -123,8 +123,10 @@ MonoBehaviour:
   LookRadius: 10
   anim: {fileID: 971091677392467515}
   chaseResumeExtra: 0.85
+  runAnimationLeadTime: 0.08
   attackAnimatorStateShortName: attack
   attackAnimatorLayer: 0
+  meleeGlobalHitCooldown: 0.35
   maxHealth: 100
   currentHealth: 0
   deathStyle: 2
@@ -254,8 +256,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 302079dd7d6f8a14ab8b3299f6b49bc0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::sphereTriggerDamage
-  damage: 20
+  damage: 10
   playerTag: Player
+  fallbackHitInterval: 0.5
   owner: {fileID: 0}
 --- !u!1001 &858468452874187527
 PrefabInstance:
