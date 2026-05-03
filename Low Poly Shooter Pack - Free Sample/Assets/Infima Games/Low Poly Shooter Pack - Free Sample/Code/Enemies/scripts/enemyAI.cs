@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.SceneManagement;
 
 public class enemyAI : MonoBehaviour
 {
@@ -39,6 +40,9 @@ public class enemyAI : MonoBehaviour
     [Tooltip("Через сколько секунд удалять тело с сцены после регдолла.")]
     [SerializeField] private float corpseDestroyDelay = 4f;
     private const float CorpseDestroyDelayHard = 4f;
+
+    [Tooltip("Имя сцены экрана победы. Босс: объект с подстрокой \"boss\" в имени (без учёта регистра).")]
+    [SerializeField] private string victorySceneName = "Victory";
 
     private bool isAttacking;
     /// <summary>Последние значения bool в Animator — не дёргаем каждый кадр без нужды.</summary>
@@ -318,6 +322,17 @@ public class enemyAI : MonoBehaviour
 
         isDead = true;
         PlayerProgression.RegisterEnemyKill();
+
+        if (IsBossEnemy())
+        {
+            Time.timeScale = 1f;
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+            if (!string.IsNullOrEmpty(victorySceneName))
+                SceneManager.LoadScene(victorySceneName);
+            return;
+        }
+
         enabled = false;
         aggroFromDamage = false;
 
@@ -333,5 +348,10 @@ public class enemyAI : MonoBehaviour
 
         // Unity сериализует старые значения в сценах/префабах, поэтому фиксируем 4 секунды жёстко.
         Destroy(gameObject, CorpseDestroyDelayHard);
+    }
+
+    private bool IsBossEnemy()
+    {
+        return gameObject.name.ToLowerInvariant().Contains("boss");
     }
 }
